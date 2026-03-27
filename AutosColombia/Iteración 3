@@ -1,0 +1,139 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime
+import math
+
+class AutosColombiaApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("🚗 Autos Colombia v3.0 - Sistema Integral")
+        self.root.geometry("950x650")
+        self.root.configure(bg="#f0f2f5")
+
+        self.tarifa_por_minuto = 100
+        self.usuarios_mensuales = {}
+        self.estado_celdas = {}
+        
+        for i in range(1, 21):
+            self.estado_celdas[i] = {"estado": "Libre", "placa": "", "entrada": None, "tipo": ""}
+
+        self.configurar_estilos()
+        self.crear_interfaz()
+
+    def configurar_estilos(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TNotebook", background="#27ae60")
+        style.configure("TNotebook.Tab", font=('Arial', 10, 'bold'), padding=[10, 5])
+
+    def crear_interfaz(self):
+        header = tk.Frame(self.root, bg="#27ae60", height=80)
+        header.pack(fill="x")
+        tk.Label(header, text="AUTOS COLOMBIA - SISTEMA INTEGRAL", font=("Arial", 20, "bold"), fg="white", bg="#27ae60").pack(pady=15)
+
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(pady=10, expand=True, fill='both', padx=20)
+
+        self.tab_mapa = ttk.Frame(self.notebook)
+        self.tab_usuarios = ttk.Frame(self.notebook)
+        self.tab_pagos = ttk.Frame(self.notebook)
+
+        self.notebook.add(self.tab_mapa, text="🅿️ Mapa de Celdas")
+        self.notebook.add(self.tab_usuarios, text="👥 Usuarios Mensuales")
+        self.notebook.add(self.tab_pagos, text="💰 Historial de Pagos")
+
+        self.setup_tab_pagos()
+        self.setup_tab_usuarios()
+        self.setup_tab_mapa()
+
+    def setup_tab_pagos(self):
+        frame = tk.Frame(self.tab_pagos, bg="white")
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+        tk.Label(frame, text="Historial de Pagos", font=("Arial", 14, "bold"), bg="white").pack(pady=10)
+        self.tree_pagos = ttk.Treeview(frame, columns=("Placa", "Tipo", "Entrada", "Salida", "Total"), show="headings")
+        for col in ("Placa", "Tipo", "Entrada", "Salida", "Total"):
+            self.tree_pagos.heading(col, text=col)
+            self.tree_pagos.column(col, width=100, anchor="center")
+        self.tree_pagos.pack(fill="both", expand=True)
+
+    def setup_tab_usuarios(self):
+        frame = tk.Frame(self.tab_usuarios, bg="white")
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+        tk.Label(frame, text="Registrar Usuario Mensual", font=("Arial", 12, "bold"), bg="white").pack(pady=5)
+        self.ent_nombre = ttk.Entry(frame)
+        self.ent_nombre.pack(pady=2)
+        self.ent_placa_m = ttk.Entry(frame)
+        self.ent_placa_m.pack(pady=2)
+        tk.Button(frame, text="Registrar", bg="#2980b9", fg="white", command=self.registrar_mensualidad).pack(pady=5)
+        self.tree_users = ttk.Treeview(frame, columns=("Nombre", "Placa"), show="headings", height=5)
+        self.tree_users.heading("Nombre", text="Nombre")
+        self.tree_users.heading("Placa", text="Placa")
+        self.tree_users.pack(fill="x", pady=10)
+
+    def registrar_mensualidad(self):
+        n, p = self.ent_nombre.get().upper(), self.ent_placa_m.get().upper()
+        if n and p:
+            self.usuarios_mensuales[p] = n
+            self.tree_users.insert("", "end", values=(n, p))
+            self.ent_nombre.delete(0, 'end'), self.ent_placa_m.delete(0, 'end')
+
+    def setup_tab_mapa(self):
+        self.frame_grid = tk.Frame(self.tab_mapa, bg="white")
+        self.frame_grid.pack(pady=20)
+        self.dibujar_mapa()
+
+    def dibujar_mapa(self):
+        for w in self.frame_grid.winfo_children(): w.destroy()
+        for i, info in self.estado_celdas.items():
+            color = "#2ecc71" if info["estado"] == "Libre" else ("#3498db" if info["tipo"] == "Mensual" else "#e74c3c")
+            btn = tk.Button(self.frame_grid, text=f"C{i}\n{info['placa']}", bg=color, fg="white", width=10, height=3,
+                            command=lambda idx=i: self.interaccion_celda(idx))
+            btn.grid(row=(i-1)//5, column=(i-1)%5, padx=5, pady=5)
+
+    def interaccion_celda(self, i):
+        if self.estado_celdas[i]["estado"] == "Libre": self.ventana_ingreso(i)
+        else: self.ventana_salida(i)
+
+    def ventana_ingreso(self, i):
+        win = tk.Toplevel(self.root)
+        win.geometry("250x150")
+        tk.Label(win, text="Placa:").pack(pady=5)
+        ent = ttk.Entry(win)
+        ent.pack()
+        def ok():
+            p = ent.get().upper()
+            if p:
+                tipo = "Mensual" if p in self.usuarios_mensuales else "Diario"
+                self.estado_celdas[i] = {"estado":"Ocupado", "placa":p, "entrada":datetime.now(), "tipo":tipo}
+                self.dibujar_mapa()
+                win.destroy()
+        tk.Button(win, text="Ingresar", command=ok).pack(pady=10)
+
+    def ventana_salida(self, i):
+        info = self.estado_celdas[i]
+        ahora = datetime.now()
+        dif = ahora - info["entrada"]
+        minutos = math.ceil(dif.total_seconds() / 60) if dif.total_seconds() > 60 else 1
+        total = 0 if info["tipo"] == "Mensual" else minutos * self.tarifa_por_minuto
+        
+        win = tk.Toplevel(self.root)
+        win.geometry("350x450")
+        win.grab_set()
+        
+        tk.Label(win, text="RECIBO", font=("Arial", 14, "bold")).pack(pady=10)
+        res = f"Placa: {info['placa']}\nEntrada: {info['entrada'].strftime('%H:%M')}\nTotal: ${total}"
+        tk.Label(win, text=res, font=("Courier", 10)).pack(pady=20)
+
+        def confirmar():
+            self.tree_pagos.insert("", 0, values=(info['placa'], info['tipo'], info['entrada'].strftime('%H:%M'), ahora.strftime('%H:%M'), f"${total}"))
+            self.estado_celdas[i] = {"estado": "Libre", "placa": "", "entrada": None, "tipo": ""}
+            self.dibujar_mapa()
+            win.destroy()
+            messagebox.showinfo("OK", "Pago registrado")
+
+        tk.Button(win, text="CONFIRMAR PAGO", bg="#27ae60", fg="white", font=("Arial", 12, "bold"), command=confirmar).pack(pady=20)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AutosColombiaApp(root)
+    root.mainloop()
